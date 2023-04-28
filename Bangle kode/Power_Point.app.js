@@ -1,42 +1,40 @@
-var counter = 30;
-var counterInterval;
-
-function outOfTime() {
-  if (counterInterval) return;
-  E.showMessage("Out of Time", "My Timer");
-  Bangle.buzz();
-  Bangle.beep(200, 4000)
-    .then(() => new Promise(resolve => setTimeout(resolve,200)))
-    .then(() => Bangle.beep(200, 3000));
-  // again, 10 secs later
-  setTimeout(outOfTime, 10000);
-}
-
-function countDown() {
-  counter--;
-  // Out of time
-  if (counter<=0) {
-    clearInterval(counterInterval);
-    counterInterval = undefined;
-    setWatch(startTimer, (process.env.HWVERSION==2) ? BTN1 : BTN2)
-    outOfTime();
-    return;
-  }
-
+g.clear();
+g.flip();
+g.drawString('Connecting...',30,70,true);
+NRF.on('connect', function() {
   g.clear();
-  g.setFontAlign(0,0); // center font
-  g.setFont("Vector",80); // vector font, 80px  
-  // draw the current counter value
-  g.drawString(counter,120,120);
-  // optional - this keeps the watch LCD lit up
-  Bangle.setLCDPower(1);
-}
+  g.setFont("6x8",3);g.setFontAlign(-1,-1);
+  g.drawString('Connected',30,70,true);
+  setWatch(function() {
+    g.clear();
+    g.flip();
+    (function(){
+      var gatt;
+      var text = 'LED.toggle()'+"\n";
+      NRF.requestDevice({ filters: [{ name: "Puck.js ABCD" }] }).then(function(device) {
+      return device.gatt.connect();
+    }).then(function(g) {
+        gatt = g;
+        return g.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
+      }).then(function(s) {
+        return s.getCharacteristic("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
+      }).then(function(c) {
+        function sender(resolve, reject) {
+          if (text.length) {
+            var d = text.substr(0,20);
+            text = text.substr(20);
+            c.writeValue(d).then(function() {
+              sender(resolve, reject);
+            },reject);
+          } else  {
+            resolve();
+          }
+        }
+        return new Promise(sender);
+      }).then(function() {
+        return gatt.disconnect();
+      }).then(function() {
 
-function startTimer() {
-  counter = 30;
-  countDown();
-  if (!counterInterval)
-    counterInterval = setInterval(countDown, 1000);
-}
-
-startTimer();
+      });
+    })(); }, BTN1, {"repeat":true,"edge":"rising","debounce":10});
+});
